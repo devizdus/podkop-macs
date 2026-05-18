@@ -76,7 +76,7 @@ podkop-macs/
 
 ```
 # Устройства, которые будут ходить через podkop/proxy
-aa:bb:cc:dd:ee:ff  # devizdus-workbook
+aa:bb:cc:dd:ee:ff  # my-laptop
 aa:bb:cc:dd:ee:ff  # ещё устройство
 ```
 
