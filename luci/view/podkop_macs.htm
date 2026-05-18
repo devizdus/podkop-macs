@@ -102,7 +102,7 @@ if lease_opts then
                 seen[mac_lower] = true
                 hostname = hostname or ""
                 local label = string.format("%s (%s%s)", mac_lower, ip, hostname ~= "" and (", " .. hostname) or "")
-                luci.http.write(string.format('<option value="%s">%s</option>\n', util.pcdata(mac_lower), util.pcdata(label)))
+                luci.http.write(string.format('<option value="%s" data-hostname="%s">%s</option>\n', util.pcdata(mac_lower), util.pcdata(hostname), util.pcdata(label)))
             end
         end
     end
@@ -171,10 +171,24 @@ function podkopAddSelectedMac() {
         }
     }
 
+    var selected = sel && sel.options ? sel.options[sel.selectedIndex] : null;
+    var hostname = selected ? (selected.getAttribute("data-hostname") || "") : "";
+    hostname = hostname.trim();
+    if (hostname === "*" || hostname === "-") {
+        hostname = "";
+    }
+    hostname = hostname.replace(/[\r\n#]/g, " ").replace(/\s+/g, " ").trim();
+
+    var now = new Date();
+    var month = now.getMonth() + 1;
+    var day = now.getDate();
+    var date = now.getFullYear() + "-" + (month < 10 ? "0" + month : month) + "-" + (day < 10 ? "0" + day : day);
+    var comment = hostname ? (hostname + ", added " + date) : ("added " + date);
+
     if (ta.value !== "" && !ta.value.match(/\n$/)) {
         ta.value += "\n";
     }
-    ta.value += mac + "\n";
+    ta.value += mac + "  # " + comment + "\n";
     ta.focus();
 }
 </script>
