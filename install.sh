@@ -8,6 +8,8 @@ REPO="https://github.com/devizdus/podkop-macs"
 BRANCH="main"
 TMP_DIR="/tmp/podkop-macs-install"
 SYNC_SCRIPT="/usr/bin/podkop-sync-excluded"
+TRIGGER_SCRIPT="/usr/bin/podkop-sync-trigger"
+DHCP_SCRIPT_LINE="dhcp-script=/usr/bin/podkop-sync-trigger"
 
 fix_crlf_file() {
     f="$1"
@@ -15,13 +17,14 @@ fix_crlf_file() {
     tr -d '\r' < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 }
 
-clean_dnsmasq_hook() {
-    # Remove any dhcp-script hook pointing to podkop-sync-excluded.
-    # This covers both /etc/dnsmasq.conf and UCI-managed config.
+configure_dnsmasq_hook() {
+    # Clean old podkop hooks (both direct sync-excluded and trigger) from dnsmasq.conf.
     if [ -f /etc/dnsmasq.conf ]; then
         fix_crlf_file /etc/dnsmasq.conf
-        grep -v 'podkop-sync-excluded' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
+        grep -v 'podkop-sync' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
         mv /etc/dnsmasq.conf.tmp /etc/dnsmasq.conf
+        # Add debounced trigger (never blocks dnsmasq).
+        echo "$DHCP_SCRIPT_LINE" >> /etc/dnsmasq.conf
     fi
 
     # Remove any stale UCI dhcpscript option (safety: older patches may have set it).
@@ -47,10 +50,13 @@ wget -q -O "$TMP_DIR/source.tar.gz" "${REPO}/archive/refs/heads/${BRANCH}.tar.gz
 tar xzf "$TMP_DIR/source.tar.gz" -C "$TMP_DIR"
 SRC_DIR="$TMP_DIR/podkop-macs-${BRANCH}"
 
-echo "2. Installing sync script..."
+echo "2. Installing sync scripts..."
 cp "$SRC_DIR/files/usr/bin/podkop-sync-excluded" "$SYNC_SCRIPT"
 fix_crlf_file "$SYNC_SCRIPT"
 chmod +x "$SYNC_SCRIPT"
+cp "$SRC_DIR/files/usr/bin/podkop-sync-trigger" "$TRIGGER_SCRIPT"
+fix_crlf_file "$TRIGGER_SCRIPT"
+chmod +x "$TRIGGER_SCRIPT"
 
 echo "3. Installing default MAC whitelist (empty)..."
 if [ ! -f /etc/podkop-proxy-macs ]; then
@@ -69,8 +75,8 @@ if [ -f "$SRC_DIR/luci/po/ru/podkop_macs.po" ]; then
     cp "$SRC_DIR/luci/po/ru/podkop_macs.po" /usr/lib/lua/luci/po/ru/podkop-macs.po
 fi
 
-echo "5. Cleaning dnsmasq from stale dhcp-script hooks (sync runs via cron only)..."
-clean_dnsmasq_hook
+echo "5. Configuring dnsmasq dhcp-script (debounced, non-blocking trigger)..."
+configure_dnsmasq_hook
 
 echo "6. Adding cron fallback..."
 if ! grep -q "podkop-sync-excluded" /etc/crontabs/root 2>/dev/null; then

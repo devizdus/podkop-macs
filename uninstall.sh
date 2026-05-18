@@ -9,11 +9,12 @@ echo "1. Stopping podkop (to clean nftables)..."
 /etc/init.d/podkop stop 2>/dev/null || true
 
 echo "2. Cleaning Routing Excluded IPs in podkop config..."
+uci delete podkop.settings.routing_excluded_ips 2>/dev/null || true
 uci delete podkop.@main[0].routing_excluded_ips 2>/dev/null || true
 uci commit podkop
 
-echo "3. Removing sync script..."
-rm -f /usr/bin/podkop-sync-excluded
+echo "3. Removing sync scripts..."
+rm -f /usr/bin/podkop-sync-excluded /usr/bin/podkop-sync-trigger
 
 echo "4. Removing MAC whitelist..."
 rm -f /etc/podkop-proxy-macs
@@ -27,7 +28,7 @@ rm -f /usr/lib/lua/luci/po/ru/podkop-macs.po
 
 echo "7. Removing dnsmasq hook..."
 if [ -f /etc/dnsmasq.conf ]; then
-    grep -v 'podkop-sync-excluded' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
+    grep -v 'podkop-sync' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
     mv /etc/dnsmasq.conf.tmp /etc/dnsmasq.conf
 fi
 # Clean UCI dhcpscript if present (set by older patches)

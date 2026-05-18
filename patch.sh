@@ -7,6 +7,8 @@ REPO="https://github.com/devizdus/podkop-macs"
 BRANCH="main"
 TMP_DIR="/tmp/podkop-macs-patch"
 SYNC_SCRIPT="/usr/bin/podkop-sync-excluded"
+TRIGGER_SCRIPT="/usr/bin/podkop-sync-trigger"
+DHCP_SCRIPT_LINE="dhcp-script=/usr/bin/podkop-sync-trigger"
 
 echo "=== podkop-macs patch ==="
 
@@ -23,9 +25,9 @@ fix_crlf_file() {
     tr -d '\r' < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 }
 
-ensure_sync_script() {
-    if [ ! -s "$SYNC_SCRIPT" ]; then
-        echo "1. Sync script is missing; downloading and restoring..."
+ensure_sync_scripts() {
+    if [ ! -s "$SYNC_SCRIPT" ] || [ ! -s "$TRIGGER_SCRIPT" ]; then
+        echo "1. Sync scripts missing; downloading and restoring..."
         need_cmd wget
         need_cmd tar
         rm -rf "$TMP_DIR"
@@ -33,12 +35,14 @@ ensure_sync_script() {
         wget -q -O "$TMP_DIR/source.tar.gz" "${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
         tar xzf "$TMP_DIR/source.tar.gz" -C "$TMP_DIR"
         cp "$TMP_DIR/podkop-macs-${BRANCH}/files/usr/bin/podkop-sync-excluded" "$SYNC_SCRIPT"
+        cp "$TMP_DIR/podkop-macs-${BRANCH}/files/usr/bin/podkop-sync-trigger" "$TRIGGER_SCRIPT"
     else
-        echo "1. Sync script exists."
+        echo "1. Sync scripts exist."
     fi
 
-    chmod +x "$SYNC_SCRIPT"
+    chmod +x "$SYNC_SCRIPT" "$TRIGGER_SCRIPT"
     fix_crlf_file "$SYNC_SCRIPT"
+    fix_crlf_file "$TRIGGER_SCRIPT"
 }
 
 ensure_whitelist_file() {
@@ -53,14 +57,14 @@ EOF
     fix_crlf_file /etc/podkop-proxy-macs
 }
 
-clean_dnsmasq_hook() {
-    echo "3. Removing dhcp-script hooks from dnsmasq (sync runs via cron only)..."
+configure_dnsmasq_hook() {
+    echo "3. Configuring dnsmasq dhcp-script (debounced, non-blocking trigger)..."
 
-    # Clean /etc/dnsmasq.conf
     if [ -f /etc/dnsmasq.conf ]; then
         fix_crlf_file /etc/dnsmasq.conf
-        grep -v 'podkop-sync-excluded' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
+        grep -v 'podkop-sync' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
         mv /etc/dnsmasq.conf.tmp /etc/dnsmasq.conf
+        echo "$DHCP_SCRIPT_LINE" >> /etc/dnsmasq.conf
     fi
 
     # Remove any stale UCI dhcpscript option (older patches may have set it).
@@ -104,9 +108,9 @@ cleanup_tmp() {
 need_cmd sed
 need_cmd uci
 
-ensure_sync_script
+ensure_sync_scripts
 ensure_whitelist_file
-clean_dnsmasq_hook
+configure_dnsmasq_hook
 ensure_cron_fallback
 restart_services
 run_sync_and_check

@@ -1,0 +1,19 @@
+#!/bin/sh
+# podkop-sync-trigger — lightweight dnsmasq dhcp-script hook.
+# Debounces DHCP events: runs podkop-sync-excluded at most once per 30s.
+# Exits immediately so dnsmasq is never blocked.
+
+DEBOUNCE_FILE="/tmp/podkop-sync-debounce"
+DEBOUNCE_SECS=30
+SYNC_SCRIPT="/usr/bin/podkop-sync-excluded"
+
+if [ -f "$DEBOUNCE_FILE" ]; then
+    last=$(cat "$DEBOUNCE_FILE" 2>/dev/null)
+    now=$(date +%s)
+    if [ -n "$last" ] && [ $((now - last)) -lt $DEBOUNCE_SECS ]; then
+        exit 0
+    fi
+fi
+
+date +%s > "$DEBOUNCE_FILE"
+( "$SYNC_SCRIPT" ) &
