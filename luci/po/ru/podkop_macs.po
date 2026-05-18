@@ -19,5 +19,11 @@ msgstr "Исключённые IP (генерируется автоматиче
 msgid "Save"
 msgstr "Сохранить"
 
+msgid " extension for podkop that restricts proxy to selected devices by MAC address. "
+msgstr " — расширение для podkop, ограничивающее проксирование выбранными устройствами по MAC-адресу."
+
+msgid " Add the MAC addresses of devices that should use the proxy below. All other devices are automatically excluded."
+msgstr " Добавьте ниже MAC-адреса устройств, которые должны использовать прокси. Все остальные исключаются автоматически."
+
 msgid "Sync now"
 msgstr "Синхронизировать сейчас"
