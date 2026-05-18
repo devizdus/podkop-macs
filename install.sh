@@ -7,6 +7,31 @@ set -e
 REPO="https://github.com/devizdus/podkop-macs"
 BRANCH="main"
 TMP_DIR="/tmp/podkop-macs-install"
+SYNC_SCRIPT="/usr/bin/podkop-sync-excluded"
+HOOK_LINE="dhcp-script=/usr/bin/podkop-sync-excluded"
+
+fix_crlf_file() {
+    f="$1"
+    [ -f "$f" ] || return 0
+    sed -i 's/\r$//' "$f"
+}
+
+ensure_dnsmasq_hook() {
+    # Keep legacy /etc/dnsmasq.conf hook for compatibility.
+    if [ -f /etc/dnsmasq.conf ]; then
+        fix_crlf_file /etc/dnsmasq.conf
+        sed -i '/podkop-sync-excluded/d' /etc/dnsmasq.conf
+        echo "$HOOK_LINE" >> /etc/dnsmasq.conf
+    fi
+
+    # Prefer UCI-managed dnsmasq option when available.
+    if uci -q show dhcp >/dev/null 2>&1; then
+        if uci -q get dhcp.@dnsmasq[0] >/dev/null 2>&1; then
+            uci set dhcp.@dnsmasq[0].dhcpscript="$SYNC_SCRIPT"
+            uci commit dhcp
+        fi
+    fi
+}
 
 echo "=== podkop-macs install ==="
 
@@ -25,8 +50,9 @@ tar xzf "$TMP_DIR/source.tar.gz" -C "$TMP_DIR"
 SRC_DIR="$TMP_DIR/podkop-macs-${BRANCH}"
 
 echo "2. Installing sync script..."
-cp "$SRC_DIR/files/usr/bin/podkop-sync-excluded" /usr/bin/podkop-sync-excluded
-chmod +x /usr/bin/podkop-sync-excluded
+cp "$SRC_DIR/files/usr/bin/podkop-sync-excluded" "$SYNC_SCRIPT"
+fix_crlf_file "$SYNC_SCRIPT"
+chmod +x "$SYNC_SCRIPT"
 
 echo "3. Installing default MAC whitelist (empty)..."
 if [ ! -f /etc/podkop-proxy-macs ]; then
@@ -46,14 +72,13 @@ if [ -f "$SRC_DIR/luci/po/ru/podkop_macs.po" ]; then
 fi
 
 echo "5. Configuring dnsmasq auto-sync..."
-if ! grep -q "podkop-sync-excluded" /etc/dnsmasq.conf 2>/dev/null; then
-    echo "dhcp-script=/usr/bin/podkop-sync-excluded" >> /etc/dnsmasq.conf
-fi
+ensure_dnsmasq_hook
 
 echo "6. Adding cron fallback..."
 if ! grep -q "podkop-sync-excluded" /etc/crontabs/root 2>/dev/null; then
     echo "*/5 * * * * /usr/bin/podkop-sync-excluded" >> /etc/crontabs/root
 fi
+fix_crlf_file /etc/crontabs/root
 
 echo "7. Cleaning temp files..."
 rm -rf "$TMP_DIR"
@@ -65,7 +90,7 @@ rm -f /tmp/luci-indexcache
 /etc/init.d/cron restart 2>/dev/null || true
 
 echo "9. Running initial sync..."
-/usr/bin/podkop-sync-excluded
+"$SYNC_SCRIPT"
 
 echo ""
 echo "=== Done ==="

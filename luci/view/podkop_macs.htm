@@ -134,8 +134,15 @@ end
 <pre style="max-height:150px;overflow:auto;">
 <%
 local uci = require("luci.model.uci").cursor()
-local ips = uci:get_list("podkop", "main", "routing_excluded_ips")
-if ips then
+local ips = nil
+
+-- podkop usually stores data in anonymous @main[0] section.
+uci:foreach("podkop", "main", function(s)
+    ips = uci:get_list("podkop", s[".name"], "routing_excluded_ips")
+    return false
+end)
+
+if ips and #ips > 0 then
     for _, ip in ipairs(ips) do
         luci.http.write(ip .. "\n")
     end
