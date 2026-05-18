@@ -15,7 +15,7 @@
 <hr>
 
 <h3><%:Current leases (for reference)%></h3>
-<pre style="max-height:150px;overflow:auto;border:1px solid var(--cbi-border-color, #ccc);">
+<pre style="max-height:150px;overflow:auto;">
 <%
 local leases = io.open("/tmp/dhcp.leases")
 if leases then
@@ -51,7 +51,7 @@ end
 <br>
 
 <h3><%:Excluded IPs (generated automatically)%></h3>
-<pre style="max-height:150px;overflow:auto;border:1px solid var(--cbi-border-color, #ccc);">
+<pre style="max-height:150px;overflow:auto;">
 <%
 local uci = require("luci.model.uci").cursor()
 local ips = uci:get_list("podkop", "main", "routing_excluded_ips")
