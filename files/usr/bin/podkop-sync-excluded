@@ -5,13 +5,83 @@
 PROXY_MACS_FILE="/etc/podkop-proxy-macs"
 LEASES_FILE="/tmp/dhcp.leases"
 PODKOP_SECTION="main"
+LOCK_DIR="/var/lock/podkop-sync.lock"
+LOCK_HELD=0
 
 log_msg() {
     logger -t podkop-sync "$1"
 }
 
-# Read allowed MACs (skip comments and empty lines, lowercase)
-PROXY_MACS=$(grep -v '^#' "$PROXY_MACS_FILE" 2>/dev/null | grep -v '^$' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+release_lock() {
+    if [ "$LOCK_HELD" = "1" ]; then
+        rm -f "$LOCK_DIR/pid" 2>/dev/null
+        rmdir "$LOCK_DIR" 2>/dev/null
+        LOCK_HELD=0
+    fi
+}
+
+acquire_lock() {
+    mkdir -p /var/lock 2>/dev/null || true
+
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo "$$" > "$LOCK_DIR/pid" 2>/dev/null || true
+        LOCK_HELD=1
+        return 0
+    fi
+
+    # Handle stale lock: if owner pid is gone, clear lock and retry once.
+    if [ -r "$LOCK_DIR/pid" ]; then
+        stale_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null)"
+        if [ -n "$stale_pid" ] && ! kill -0 "$stale_pid" 2>/dev/null; then
+            rm -f "$LOCK_DIR/pid" 2>/dev/null
+            rmdir "$LOCK_DIR" 2>/dev/null
+            if mkdir "$LOCK_DIR" 2>/dev/null; then
+                echo "$$" > "$LOCK_DIR/pid" 2>/dev/null || true
+                LOCK_HELD=1
+                log_msg "Recovered stale lock from pid=$stale_pid"
+                return 0
+            fi
+        fi
+    fi
+
+    return 1
+}
+
+trap 'release_lock' EXIT INT TERM
+
+if ! acquire_lock; then
+    log_msg "Another sync process is running; skipped"
+    exit 0
+fi
+
+# Read allowed MACs with validation.
+# Format: aa:bb:cc:dd:ee:ff (case-insensitive), one per line.
+PROXY_MACS=""
+RAW_ENTRIES=0
+INVALID_ENTRIES=0
+
+if [ -r "$PROXY_MACS_FILE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        mac_candidate=$(echo "$line" | sed 's/#.*$//' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+        [ -z "$mac_candidate" ] && continue
+
+        RAW_ENTRIES=$((RAW_ENTRIES + 1))
+        if echo "$mac_candidate" | grep -Eq '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$'; then
+            case " $PROXY_MACS " in
+                *" $mac_candidate "*) ;;
+                *) PROXY_MACS="$PROXY_MACS $mac_candidate" ;;
+            esac
+        else
+            INVALID_ENTRIES=$((INVALID_ENTRIES + 1))
+            log_msg "Ignored invalid MAC in whitelist: $mac_candidate"
+        fi
+    done < "$PROXY_MACS_FILE"
+fi
+
+if [ "$RAW_ENTRIES" -gt 0 ] && [ -z "$PROXY_MACS" ]; then
+    log_msg "No valid MACs found in whitelist; skipping update to keep previous routing state"
+    exit 0
+fi
 
 # If whitelist is empty — enable proxy for all devices (clear excluded)
 if [ -z "$PROXY_MACS" ]; then
@@ -19,6 +89,12 @@ if [ -z "$PROXY_MACS" ]; then
     uci commit podkop
     /etc/init.d/podkop reload 2>/dev/null || /usr/bin/podkop reload 2>/dev/null
     log_msg "Proxy enabled for ALL devices (whitelist empty)"
+    exit 0
+fi
+
+# If leases file is unavailable, keep current state to avoid accidental rewrites.
+if [ ! -r "$LEASES_FILE" ]; then
+    log_msg "DHCP leases file is missing/unreadable ($LEASES_FILE); skipping update"
     exit 0
 fi
 
@@ -50,4 +126,8 @@ uci commit podkop
 /etc/init.d/podkop reload 2>/dev/null || /usr/bin/podkop reload 2>/dev/null
 
 COUNT=$(echo "$EXCLUDED_IPS" | wc -w)
-log_msg "Excluded IPs updated: $COUNT devices"
+if [ "$INVALID_ENTRIES" -gt 0 ]; then
+    log_msg "Excluded IPs updated: $COUNT devices (invalid whitelist entries ignored: $INVALID_ENTRIES)"
+else
+    log_msg "Excluded IPs updated: $COUNT devices"
+fi
