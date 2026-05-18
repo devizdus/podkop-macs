@@ -54,3 +54,15 @@ msgstr " Добавьте ниже MAC-адреса устройств, кото
 
 msgid "Sync now"
 msgstr "Синхронизировать сейчас"
+
+msgid "Sync logs (live)"
+msgstr "Логи синхронизации (в реальном времени)"
+
+msgid "Sync started. Updating logs..."
+msgstr "Синхронизация запущена. Обновляю логи..."
+
+msgid "Sync finished (or timed out). Logs are up to date."
+msgstr "Синхронизация завершена (или вышел таймаут). Логи обновлены."
+
+msgid "Failed to start sync."
+msgstr "Не удалось запустить синхронизацию."

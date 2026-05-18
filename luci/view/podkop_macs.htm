@@ -146,11 +146,30 @@ end
 </pre>
 
 <br>
-<form method="post" action="<%=luci.dispatcher.build_url("admin/services/podkop_macs/sync")%>">
-    <input type="submit" class="cbi-button cbi-button-apply" value="<%:Sync now%>">
-</form>
+<input id="podkop_sync_now_btn" type="button" class="cbi-button cbi-button-apply" value="<%:Sync now%>" onclick="podkopRunSync()">
+<noscript>
+    <form method="post" action="<%=luci.dispatcher.build_url("admin/services/podkop_macs/sync")%>">
+        <input type="submit" class="cbi-button cbi-button-apply" value="<%:Sync now%>">
+    </form>
+</noscript>
+<div id="podkop_sync_state" style="margin-top:8px;color:#666;"></div>
+
+<h3><%:Sync logs (live)%></h3>
+<pre id="podkop_sync_logs" style="max-height:220px;overflow:auto;"><%
+local sync_logs = sys.exec("logread -e 'podkop-sync' | tail -n 30 2>/dev/null")
+sync_logs = (sync_logs or ""):gsub("%s+$", "")
+if sync_logs == "" then
+    sync_logs = "[no podkop-sync entries yet]"
+end
+luci.http.write(sync_logs)
+%></pre>
 
 <script type="text/javascript">
+var PODKOP_SYNC_START_URL = "<%=luci.dispatcher.build_url("admin/services/podkop_macs/sync_start")%>";
+var PODKOP_SYNC_LOGS_URL = "<%=luci.dispatcher.build_url("admin/services/podkop_macs/sync_logs")%>";
+var podkopSyncPollTimer = null;
+var podkopSyncPollRemaining = 0;
+
 function podkopAddSelectedMac() {
     var sel = document.getElementById("lease_mac_select");
     var mac = sel ? (sel.value || "").toLowerCase().trim() : "";
@@ -190,6 +209,83 @@ function podkopAddSelectedMac() {
     }
     ta.value += mac + "  # " + comment + "\n";
     ta.focus();
+}
+
+function podkopSetSyncState(msg, isError) {
+    var box = document.getElementById("podkop_sync_state");
+    if (!box) {
+        return;
+    }
+    box.style.color = isError ? "#a50e0e" : "#666";
+    box.textContent = msg || "";
+}
+
+function podkopFetchSyncLogs() {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", PODKOP_SYNC_LOGS_URL + "?_=" + Date.now(), true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) {
+            return;
+        }
+        if (xhr.status < 200 || xhr.status >= 300) {
+            return;
+        }
+        var pre = document.getElementById("podkop_sync_logs");
+        if (!pre) {
+            return;
+        }
+        pre.textContent = xhr.responseText || "[no podkop-sync entries yet]";
+        pre.scrollTop = pre.scrollHeight;
+    };
+    xhr.send(null);
+}
+
+function podkopStartSyncLogPolling(seconds) {
+    if (podkopSyncPollTimer) {
+        clearInterval(podkopSyncPollTimer);
+        podkopSyncPollTimer = null;
+    }
+    podkopSyncPollRemaining = seconds || 20;
+    podkopFetchSyncLogs();
+    podkopSyncPollTimer = setInterval(function() {
+        podkopSyncPollRemaining -= 1;
+        podkopFetchSyncLogs();
+        if (podkopSyncPollRemaining <= 0) {
+            clearInterval(podkopSyncPollTimer);
+            podkopSyncPollTimer = null;
+            podkopSetSyncState("<%:Sync finished (or timed out). Logs are up to date.%>", false);
+        }
+    }, 1000);
+}
+
+function podkopRunSync() {
+    var btn = document.getElementById("podkop_sync_now_btn");
+    if (btn) {
+        btn.disabled = true;
+    }
+    podkopSetSyncState("<%:Sync started. Updating logs...%>", false);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", PODKOP_SYNC_START_URL, true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) {
+            return;
+        }
+        if (btn) {
+            btn.disabled = false;
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+            podkopStartSyncLogPolling(20);
+        } else {
+            podkopSetSyncState("<%:Failed to start sync.%>", true);
+        }
+    };
+    var body = "";
+    if (window.L && L.env && L.env.token) {
+        body = "token=" + encodeURIComponent(L.env.token);
+    }
+    xhr.send(body);
 }
 </script>
 
