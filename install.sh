@@ -8,28 +8,26 @@ REPO="https://github.com/devizdus/podkop-macs"
 BRANCH="main"
 TMP_DIR="/tmp/podkop-macs-install"
 SYNC_SCRIPT="/usr/bin/podkop-sync-excluded"
-HOOK_LINE="dhcp-script=/usr/bin/podkop-sync-excluded"
 
 fix_crlf_file() {
     f="$1"
     [ -f "$f" ] || return 0
-    sed -i 's/\r$//' "$f"
+    tr -d '\r' < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 }
 
-ensure_dnsmasq_hook() {
-    # Keep legacy /etc/dnsmasq.conf hook for compatibility.
+clean_dnsmasq_hook() {
+    # Remove any dhcp-script hook pointing to podkop-sync-excluded.
+    # This covers both /etc/dnsmasq.conf and UCI-managed config.
     if [ -f /etc/dnsmasq.conf ]; then
         fix_crlf_file /etc/dnsmasq.conf
-        sed -i '/podkop-sync-excluded/d' /etc/dnsmasq.conf
-        echo "$HOOK_LINE" >> /etc/dnsmasq.conf
+        grep -v 'podkop-sync-excluded' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
+        mv /etc/dnsmasq.conf.tmp /etc/dnsmasq.conf
     fi
 
-    # Prefer UCI-managed dnsmasq option when available.
-    if uci -q show dhcp >/dev/null 2>&1; then
-        if uci -q get dhcp.@dnsmasq[0] >/dev/null 2>&1; then
-            uci set dhcp.@dnsmasq[0].dhcpscript="$SYNC_SCRIPT"
-            uci commit dhcp
-        fi
+    # Remove any stale UCI dhcpscript option (safety: older patches may have set it).
+    if uci -q get dhcp.@dnsmasq[0].dhcpscript >/dev/null 2>&1; then
+        uci delete dhcp.@dnsmasq[0].dhcpscript
+        uci commit dhcp
     fi
 }
 
@@ -71,8 +69,8 @@ if [ -f "$SRC_DIR/luci/po/ru/podkop_macs.po" ]; then
     cp "$SRC_DIR/luci/po/ru/podkop_macs.po" /usr/lib/lua/luci/po/ru/podkop-macs.po
 fi
 
-echo "5. Configuring dnsmasq auto-sync..."
-ensure_dnsmasq_hook
+echo "5. Cleaning dnsmasq from stale dhcp-script hooks (sync runs via cron only)..."
+clean_dnsmasq_hook
 
 echo "6. Adding cron fallback..."
 if ! grep -q "podkop-sync-excluded" /etc/crontabs/root 2>/dev/null; then

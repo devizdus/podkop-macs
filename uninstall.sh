@@ -26,7 +26,15 @@ echo "6. Removing translations..."
 rm -f /usr/lib/lua/luci/po/ru/podkop-macs.po
 
 echo "7. Removing dnsmasq hook..."
-sed -i '/podkop-sync-excluded/d' /etc/dnsmasq.conf
+if [ -f /etc/dnsmasq.conf ]; then
+    grep -v 'podkop-sync-excluded' /etc/dnsmasq.conf > /etc/dnsmasq.conf.tmp
+    mv /etc/dnsmasq.conf.tmp /etc/dnsmasq.conf
+fi
+# Clean UCI dhcpscript if present (set by older patches)
+if uci -q get dhcp.@dnsmasq[0].dhcpscript >/dev/null 2>&1; then
+    uci delete dhcp.@dnsmasq[0].dhcpscript
+    uci commit dhcp
+fi
 
 echo "8. Removing cron job..."
 sed -i '/podkop-sync-excluded/d' /etc/crontabs/root
