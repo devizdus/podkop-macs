@@ -1,0 +1,7 @@
+# Podkop MAC whitelist
+# Add one MAC address per line. Devices with MACs listed here will use the proxy.
+# All other devices are automatically excluded.
+# Lines starting with # are comments. Empty lines are ignored.
+#
+# Example:
+# aa:bb:cc:dd:ee:ff  # my-laptop

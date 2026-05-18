@@ -1,0 +1,53 @@
+#!/bin/sh
+# podkop-sync-excluded — synchronize Routing Excluded IPs in podkop
+# based on MAC whitelist and current DHCP leases.
+
+PROXY_MACS_FILE="/etc/podkop-proxy-macs"
+LEASES_FILE="/tmp/dhcp.leases"
+PODKOP_SECTION="main"
+
+log_msg() {
+    logger -t podkop-sync "$1"
+}
+
+# Read allowed MACs (skip comments and empty lines, lowercase)
+PROXY_MACS=$(grep -v '^#' "$PROXY_MACS_FILE" 2>/dev/null | grep -v '^$' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+
+# If whitelist is empty — enable proxy for all devices (clear excluded)
+if [ -z "$PROXY_MACS" ]; then
+    uci delete podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips 2>/dev/null
+    uci commit podkop
+    /etc/init.d/podkop reload 2>/dev/null || /usr/bin/podkop reload 2>/dev/null
+    log_msg "Proxy enabled for ALL devices (whitelist empty)"
+    exit 0
+fi
+
+# Collect IPs whose MAC is NOT in whitelist
+EXCLUDED_IPS=""
+while read -r expiry mac ip hostname rest; do
+    [ -z "$ip" ] && continue
+    mac_lower=$(echo "$mac" | tr '[:upper:]' '[:lower:]')
+    FOUND=0
+    for proxy_mac in $PROXY_MACS; do
+        if [ "$mac_lower" = "$proxy_mac" ]; then
+            FOUND=1
+            break
+        fi
+    done
+    if [ "$FOUND" = "0" ]; then
+        EXCLUDED_IPS="$EXCLUDED_IPS $ip"
+    fi
+done < "$LEASES_FILE"
+
+# Update podkop: clear old list, add new
+uci delete podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips 2>/dev/null
+for ip in $EXCLUDED_IPS; do
+    uci add_list podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips="$ip"
+done
+uci commit podkop
+
+# Apply
+/etc/init.d/podkop reload 2>/dev/null || /usr/bin/podkop reload 2>/dev/null
+
+COUNT=$(echo "$EXCLUDED_IPS" | wc -w)
+log_msg "Excluded IPs updated: $COUNT devices"

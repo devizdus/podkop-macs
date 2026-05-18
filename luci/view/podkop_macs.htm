@@ -1,0 +1,64 @@
+<%+header%>
+
+<h2><%:Podkop MAC Filter%></h2>
+<p><%:Only devices with MAC addresses listed below will use the proxy. All other devices are automatically excluded.%></p>
+
+<hr>
+
+<h3><%:Current leases (for reference)%></h3>
+<pre style="background:#f5f5f5;padding:10px;border-radius:4px;max-height:150px;overflow:auto;">
+<%
+local leases = io.open("/tmp/dhcp.leases")
+if leases then
+    for line in leases:lines() do
+        local expiry, mac, ip, hostname = line:match("^(%S+)%s+(%S+)%s+(%S+)%s+(%S+)")
+        if mac and ip then
+            hostname = hostname or ""
+            luci.http.write(string.format("%-18s  %-15s  %s\n", mac, ip, hostname))
+        end
+    end
+    leases:close()
+else
+    luci.http.write("[no leases file]\n")
+end
+%>
+</pre>
+
+<hr>
+
+<h3><%:Allowed MACs (one per line)%></h3>
+<form method="post" action="<%=luci.dispatcher.build_url("admin/services/podkop_macs/save")%>">
+    <textarea name="macs" rows="12" style="width:100%;font-family:monospace;font-size:13px;"><%
+        local f = io.open("/etc/podkop-proxy-macs")
+        if f then
+            luci.http.write(f:read("*a"))
+            f:close()
+        end
+    %></textarea>
+    <br><br>
+    <input type="submit" class="cbi-button cbi-button-save" value="<%:Save%>">
+</form>
+
+<br>
+
+<h3><%:Excluded IPs (generated automatically)%></h3>
+<pre style="background:#f5f5f5;padding:10px;border-radius:4px;max-height:150px;overflow:auto;">
+<%
+local uci = require("luci.model.uci").cursor()
+local ips = uci:get_list("podkop", "main", "routing_excluded_ips")
+if ips then
+    for _, ip in ipairs(ips) do
+        luci.http.write(ip .. "\n")
+    end
+else
+    luci.http.write("[none — all devices are proxied]\n")
+end
+%>
+</pre>
+
+<br>
+<form method="post" action="<%=luci.dispatcher.build_url("admin/services/podkop_macs/sync")%>">
+    <input type="submit" class="cbi-button cbi-button-apply" value="<%:Sync now%>">
+</form>
+
+<%+footer%>

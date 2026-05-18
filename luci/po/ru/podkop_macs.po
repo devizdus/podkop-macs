@@ -1,0 +1,23 @@
+msgid "Podkop MACs"
+msgstr "Podkop — MAC-адреса"
+
+msgid "Podkop MAC Filter"
+msgstr "Podkop — фильтр по MAC-адресам"
+
+msgid "Only devices with MAC addresses listed below will use the proxy. All other devices are automatically excluded."
+msgstr "Только устройства с MAC-адресами из списка ниже будут использовать прокси. Все остальные исключаются автоматически."
+
+msgid "Current leases (for reference)"
+msgstr "Текущие устройства (для справки)"
+
+msgid "Allowed MACs (one per line)"
+msgstr "Разрешённые MAC-адреса (по одному на строку)"
+
+msgid "Excluded IPs (generated automatically)"
+msgstr "Исключённые IP (генерируется автоматически)"
+
+msgid "Save"
+msgstr "Сохранить"
+
+msgid "Sync now"
+msgstr "Синхронизировать сейчас"
