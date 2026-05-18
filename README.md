@@ -76,8 +76,8 @@ podkop-macs/
 
 ```
 # Устройства, которые будут ходить через podkop/proxy
-aa:bb:cc:dd:ee:ff  # my-laptop
-aa:bb:cc:dd:ee:ff  # ещё устройство
+aa:bb:cc:dd:ee:ff  # device-1
+aa:bb:cc:dd:ee:ff  # device-2
 ```
 
 ### 4.2. Скрипт синхронизации `/usr/bin/podkop-sync-excluded`
