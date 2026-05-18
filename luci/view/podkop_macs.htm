@@ -136,11 +136,8 @@ end
 local uci = require("luci.model.uci").cursor()
 local ips = nil
 
--- podkop usually stores data in anonymous @main[0] section.
-uci:foreach("podkop", "main", function(s)
-    ips = uci:get_list("podkop", s[".name"], "routing_excluded_ips")
-    return false
-end)
+-- routing_excluded_ips is stored in the settings section (podkop >= 0.7.0).
+ips = uci:get_list("podkop", "settings", "routing_excluded_ips")
 
 if ips and #ips > 0 then
     for _, ip in ipairs(ips) do

@@ -4,7 +4,7 @@
 
 PROXY_MACS_FILE="/etc/podkop-proxy-macs"
 LEASES_FILE="/tmp/dhcp.leases"
-PODKOP_SECTION="main"
+PODKOP_SECTION="settings"
 LOCK_DIR="/var/lock/podkop-sync.lock"
 LOCK_HELD=0
 
