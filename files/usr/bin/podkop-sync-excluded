@@ -83,12 +83,16 @@ if [ "$RAW_ENTRIES" -gt 0 ] && [ -z "$PROXY_MACS" ]; then
     exit 0
 fi
 
-# If whitelist is empty — enable proxy for all devices (clear excluded)
+# If whitelist is empty — enable proxy for all devices (clear excluded).
 if [ -z "$PROXY_MACS" ]; then
-    uci delete podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips 2>/dev/null
-    uci commit podkop
-    /etc/init.d/podkop reload 2>/dev/null || /usr/bin/podkop reload 2>/dev/null
-    log_msg "Proxy enabled for ALL devices (whitelist empty)"
+    if uci -q get podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips >/dev/null 2>&1; then
+        uci delete podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips 2>/dev/null
+        uci commit podkop
+        /etc/init.d/podkop reload 2>/dev/null || /usr/bin/podkop reload 2>/dev/null
+        log_msg "Proxy enabled for ALL devices (whitelist empty, cleared previous exclusions)"
+    else
+        log_msg "Proxy enabled for ALL devices (whitelist empty, already clean)"
+    fi
     exit 0
 fi
 
@@ -114,6 +118,15 @@ while read -r expiry mac ip hostname rest; do
         EXCLUDED_IPS="$EXCLUDED_IPS $ip"
     fi
 done < "$LEASES_FILE"
+
+# Compare with current excluded IPs — skip reload if unchanged (order-independent).
+CURRENT_LIST=$(uci -q get podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips 2>/dev/null | sort)
+NEW_LIST=$(echo "$EXCLUDED_IPS" | tr ' ' '\n' | sed '/^$/d' | sort)
+
+if [ "$CURRENT_LIST" = "$NEW_LIST" ]; then
+    log_msg "Excluded IPs unchanged ($(echo "$EXCLUDED_IPS" | wc -w) devices); skipped reload"
+    exit 0
+fi
 
 # Update podkop: clear old list, add new
 uci delete podkop.@"$PODKOP_SECTION"[0].routing_excluded_ips 2>/dev/null
