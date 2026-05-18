@@ -31,8 +31,7 @@ cp luci/view/podkop_macs.htm /usr/lib/lua/luci/view/podkop_macs.htm
 # Translations (optional)
 if [ -d luci/po/ru ]; then
     mkdir -p /usr/lib/lua/luci/po/ru
-    cat luci/po/ru/podkop_macs.po >> /usr/lib/lua/luci/po/ru/podkop-macs.po 2>/dev/null || \
-        cp luci/po/ru/podkop_macs.po /usr/lib/lua/luci/po/ru/podkop-macs.po
+    cp luci/po/ru/podkop_macs.po /usr/lib/lua/luci/po/ru/podkop-macs.po
 fi
 
 echo "4. Configuring dnsmasq auto-sync..."
