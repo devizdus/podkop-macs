@@ -12,6 +12,58 @@
     </div>
 </div>
 
+<h3><%:Sync status%></h3>
+<pre style="max-height:180px;overflow:auto;">
+<%
+local fs = require("nixio.fs")
+local sys = require("luci.sys")
+
+local function status_badge(state)
+    if state == "OK" then
+        return '<span style="display:inline-block;min-width:44px;text-align:center;background:#e6f4ea;color:#137333;border:1px solid #b7dfc4;border-radius:3px;padding:1px 6px;">OK</span>'
+    end
+    if state == "WARN" then
+        return '<span style="display:inline-block;min-width:44px;text-align:center;background:#fef7e0;color:#8a5300;border:1px solid #f5d48a;border-radius:3px;padding:1px 6px;">WARN</span>'
+    end
+    return '<span style="display:inline-block;min-width:44px;text-align:center;background:#fce8e6;color:#a50e0e;border:1px solid #f3b3ad;border-radius:3px;padding:1px 6px;">FAIL</span>'
+end
+
+local dnsmasq_conf = fs.readfile("/etc/dnsmasq.conf") or ""
+local has_dhcp_hook = dnsmasq_conf:find("dhcp%-script=/usr/bin/podkop%-sync%-excluded", 1, false) ~= nil
+local has_script = fs.access("/usr/bin/podkop-sync-excluded")
+local script_exec = fs.access("/usr/bin/podkop-sync-excluded", "x")
+
+local cron_tab = fs.readfile("/etc/crontabs/root") or ""
+local has_cron = cron_tab:find("podkop%-sync%-excluded", 1, false) ~= nil
+
+local dhcp_hook_state = "FAIL"
+if has_dhcp_hook then
+    dhcp_hook_state = "OK"
+elseif has_cron then
+    dhcp_hook_state = "WARN"
+end
+
+local cron_state = "FAIL"
+if has_cron then
+    cron_state = "OK"
+elseif has_dhcp_hook then
+    cron_state = "WARN"
+end
+
+local last_log = sys.exec("logread -e 'podkop-sync' | tail -n 1 2>/dev/null")
+last_log = (last_log or ""):gsub("%s+$", "")
+if last_log == "" then
+    last_log = "[no podkop-sync entries yet]"
+end
+
+luci.http.write(string.format("%-32s %s\n", translate("dhcp-script hook in dnsmasq"), status_badge(dhcp_hook_state)))
+luci.http.write(string.format("%-32s %s\n", translate("sync script file exists"), status_badge(has_script and "OK" or "FAIL")))
+luci.http.write(string.format("%-32s %s\n", translate("sync script is executable"), status_badge(script_exec and "OK" or "FAIL")))
+luci.http.write(string.format("%-32s %s\n", translate("cron fallback enabled"), status_badge(cron_state)))
+luci.http.write("\n" .. translate("Last podkop-sync log entry") .. ":\n" .. last_log .. "\n")
+%>
+</pre>
+
 <hr>
 
 <h3><%:Current leases (for reference)%></h3>
@@ -32,6 +84,34 @@ else
 end
 %>
 </pre>
+
+<h3><%:Quick add from current leases%></h3>
+<div class="cbi-value">
+    <select id="lease_mac_select" style="min-width:360px;max-width:100%;">
+        <option value=""><%:Select device to add%></option>
+<%
+local util = require("luci.util")
+local seen = {}
+local lease_opts = io.open("/tmp/dhcp.leases")
+if lease_opts then
+    for line in lease_opts:lines() do
+        local _, mac, ip, hostname = line:match("^(%S+)%s+(%S+)%s+(%S+)%s+(%S+)")
+        if mac and ip then
+            local mac_lower = string.lower(mac)
+            if not seen[mac_lower] then
+                seen[mac_lower] = true
+                hostname = hostname or ""
+                local label = string.format("%s (%s%s)", mac_lower, ip, hostname ~= "" and (", " .. hostname) or "")
+                luci.http.write(string.format('<option value="%s">%s</option>\n', util.pcdata(mac_lower), util.pcdata(label)))
+            end
+        end
+    end
+    lease_opts:close()
+end
+%>
+    </select>
+    <input type="button" class="cbi-button cbi-button-add" value="<%:Add selected MAC%>" onclick="podkopAddSelectedMac()">
+</div>
 
 <hr>
 
@@ -69,5 +149,34 @@ end
 <form method="post" action="<%=luci.dispatcher.build_url("admin/services/podkop_macs/sync")%>">
     <input type="submit" class="cbi-button cbi-button-apply" value="<%:Sync now%>">
 </form>
+
+<script type="text/javascript">
+function podkopAddSelectedMac() {
+    var sel = document.getElementById("lease_mac_select");
+    var mac = sel ? (sel.value || "").toLowerCase().trim() : "";
+    if (!mac) {
+        return;
+    }
+
+    var ta = document.querySelector('textarea[name="macs"]');
+    if (!ta) {
+        return;
+    }
+
+    var lines = ta.value.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+        var clean = lines[i].replace(/#.*/, "").trim().toLowerCase();
+        if (clean === mac) {
+            return;
+        }
+    }
+
+    if (ta.value !== "" && !ta.value.match(/\n$/)) {
+        ta.value += "\n";
+    }
+    ta.value += mac + "\n";
+    ta.focus();
+}
+</script>
 
 <%+footer%>

@@ -10,6 +10,33 @@ msgstr "Только устройства с MAC-адресами из спис�
 msgid "Current leases (for reference)"
 msgstr "Текущие устройства (для справки)"
 
+msgid "Sync status"
+msgstr "Статус синхронизации"
+
+msgid "dhcp-script hook in dnsmasq"
+msgstr "dhcp-script хук в dnsmasq"
+
+msgid "sync script file exists"
+msgstr "файл скрипта синхронизации существует"
+
+msgid "sync script is executable"
+msgstr "скрипт синхронизации исполняемый"
+
+msgid "cron fallback enabled"
+msgstr "резервный cron включён"
+
+msgid "Last podkop-sync log entry"
+msgstr "Последняя запись podkop-sync в логе"
+
+msgid "Quick add from current leases"
+msgstr "Быстрое добавление из текущих устройств"
+
+msgid "Select device to add"
+msgstr "Выберите устройство для добавления"
+
+msgid "Add selected MAC"
+msgstr "Добавить выбранный MAC"
+
 msgid "Allowed MACs (one per line)"
 msgstr "Разрешённые MAC-адреса (по одному на строку)"
 
